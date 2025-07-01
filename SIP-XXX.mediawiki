@@ -1,0 +1,144 @@
+==Abstract==
+
+This document proposes extending the Spaces Protocol to enable top-level spaces to issue human-readable names bound to public keys off-chain, known as subspaces. These bindings are sovereign and non-revocable. Once a handle is issued, it functions indefinitely off-chain without requiring any on-chain operation. When interactive functionality is required, handles can be bound to UTXOs with minimal on-chain footprint. When UTXO bound, the on-chain cost is only the UTXO itself without any additional metadata since handles are identified by their unique script_pubkey. Multiple handles can be bound in a single transaction to reduce on-chain costs. The majority of users should rely entirely on off-chain bindings without ever needing any on-chain interaction. UTXO binding is reserved for cases requiring interactive functionality or key rotation.
+
+
+==Copyright==
+
+This SIP is dual-licensed under the Open Publication License and BSD 2-clause license.
+
+==Terminology==
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119.
+
+'''Space''': A top-level name registered on-chain via an auction process (e.g., @bitcoin)
+
+'''Subspace''': An off-chain handle issued under a space (e.g., alice@bitcoin)
+
+'''Handle''': Synonym for subspace.
+
+'''Operator''': The owner of a space who can issue subspaces
+
+'''Certificate''': Cryptographic proof of subspace ownership
+
+'''Commitment''': 32-byte On-chain Merkle tree root representing the state of all subspaces for a given space at a given block height.
+
+'''UTXO Binding''': A subspace bound on-chain via its unique script_pubkey for interactive functionality.
+
+'''Off-chain binding''': A subspace in its default state, bound to a script_pubkey and existing only off-chain.
+
+==Specification==
+
+A subspace is a human-readable name bound to a unique script pubkey (a standard Bitcoin locking script) and can be represented off-chain as follows:
+
+<pre>
+Mapping := {
+    name: <dns-encoded-label>,
+    script_pubkey: <bitcoin-locking-script>
+}
+</pre>
+
+===Initial state===
+
+The operator constructs a <a href="https://spacesprotocol.org/paper/#binary-trie">Binary Merkle Trie</a> containing all subspaces in a batch and computes the tree root to create a commitment.
+
+
+'''Example Initial State:'''
+
+<pre>
+Mappings: [
+  alice@bitcoin   → script_pubkey_1,
+  charlie@bitcoin → script_pubkey_2,
+  dennis@bitcoin  → script_pubkey_3
+]
+Tree Root: r1 (32 bytes)
+On-chain Commitment: r1
+</pre>
+
+
+Subspace owners receive a Certificate containing a Merkle path to tree root r1, establishing their ownership proof.
+
+
+===State transitions===
+
+For simplicity, the protocol accepts append-only state transitions. For example, to add new subspaces (taylor@bitcoin and satoshi@bitcoin):
+
+<pre>
+Mappings: [
+  alice@bitcoin   → script_pubkey_1,
+  charlie@bitcoin → script_pubkey_2,
+  dennis@bitcoin  → script_pubkey_3,
+  taylor@bitcoin  → script_pubkey_4,
+  satoshi@bitcoin → script_pubkey_5
+]
+Tree Root: r2 (32 bytes)
+On-chain Commitment: r2
+</pre>
+
+Certificates for r1 remain valid indefinitely. New registrations in r2 receive certificates with Merkle paths to r2, plus proofs demonstrating these handles didn't exist in r1.
+
+
+===Certificates===
+
+Subspace owners MUST hold a certificate that includes:
+
+* An inclusion proof demonstrating their handle exists in the committed Merkle tree
+* A non-existence proof showing their handle was not present in any previous commitment
+
+Certificates may contain compressed zk-SNARK or STARK proofs, or verbose non-membership proofs from all prior commitments. Certificate verifiers are responsible for validating these proofs and can be implemented to support various proof types independently of the core client.
+
+
+====ZK compression====
+
+Leveraging recursive ZK-SNARK/STARKs, it's possible to recursively validate the complete set of commitments for a given space, producing a compact proof that can be embedded in the certificate.
+
+A basic non-recursive implementation is available at https://github.com/spacesprotocol/subspacer
+
+Final format: TBD
+
+
+===UTXO binding===
+
+UTXO bindings enable interactivity when needed for subspaces. They can be used to rotate keys or do atomic swaps for subspaces on-chain. Creating a UTXO binding nullifies a certificate and initiates on-chain lifecycle for the given subspace. The original certificate remains necessary as the genesis proof and must be referenced off-chain.
+
+UTXO binding transactions MUST use a special locktime (TBD) for identification. A single transaction can bind multiple subspaces.
+
+'''Example: Binding alice@bitcoin, dennis@bitcoin, and satoshi@bitcoin:'''
+
+
+{| class="wikitable"
+|-
+! colspan="3" | Txid
+|-
+! Locktime !! colspan="2" | TBD
+|-
+! Inputs !! Vout !! Outputs
+|-
+| rowspan="3" | Funding inputs ... || 0 || '''script_pubkey:''' <code>script_pubkey_1</code> <br /> '''value''': xxx
+|-
+|             || 1 || '''script_pubkey:''' <code>script_pubkey_3</code> <br /> '''value''': xxx
+|-
+|             || 2 || '''script_pubkey:''' <code>script_pubkey_5</code> <br /> '''value''': xxx
+|}
+
+
+This binds the specified script_pubkeys on-chain without requiring additional metadata or explicit handle name references.
+
+===Loss of liveness===
+
+When a top-level space operator becomes unavailable, subspace holders remain unaffected as certificates provide complete ownership proof. Upon space expiration and reacquisition, new operators must prove that proposed names did not previously exist, requiring access to the complete subspace tree. If the tree is unavailable, the space permanently loses the ability to issue new subspaces. Existing subspaces continue to function regardless of operator changes or tree availability. 
+
+
+===Commitments===
+
+New commitments are submitted via Bitcoin transactions (format TBD). Each commitment maintains a constant 32-byte footprint regardless of the number of handles being issued. The core client accepts commitments into the chain of roots without examining their internal structure or cryptographic validity. However, it's the responsibility of the certificate verifier to check the cryptographic validity of such commitments. As a result, submitting an invalid commitment breaks the cryptographic chain of proofs, permanently disabling the space's ability to issue new subspaces. Once broken, the chain cannot be repaired since subsequent commitments cannot provide valid non-existence proofs to certificate verifiers, effectively rendering the space inoperative for future issuance while preserving the integrity of existing subspaces.
+
+
+===Operator delegation===
+
+TBD
+
+
+===Implementation reference===
+
+TBD
