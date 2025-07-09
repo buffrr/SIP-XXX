@@ -46,7 +46,7 @@ The operator constructs a <a href="https://spacesprotocol.org/paper/#binary-trie
 '''Example Initial State:'''
 
 <pre>
-Mappings: [
+Mappings := [
   alice@bitcoin   → script_pubkey_1,
   charlie@bitcoin → script_pubkey_2,
   dennis@bitcoin  → script_pubkey_3
@@ -64,7 +64,7 @@ Subspace owners receive a Certificate containing a Merkle path to tree root r1, 
 For simplicity, the protocol accepts append-only state transitions. For example, to add new subspaces (taylor@bitcoin and satoshi@bitcoin):
 
 <pre>
-Mappings: [
+Mappings := [
   alice@bitcoin   → script_pubkey_1,
   charlie@bitcoin → script_pubkey_2,
   dennis@bitcoin  → script_pubkey_3,
